@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>URL to QR Tool</title>
+  <style>
+    :root {
+      --bg: #f5f8ff;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #1455cc;
+      --primary-hover: #0f46aa;
+      --border: #d7e0f3;
+      --success: #0b7b3e;
+      --danger: #b42318;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% 10%, #dce8ff 0%, transparent 35%),
+        radial-gradient(circle at 90% 20%, #e5f2ff 0%, transparent 40%),
+        var(--bg);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+
+    .app {
+      width: min(920px, 100%);
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 20px;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(20, 85, 204, 0.08);
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      margin: 0 0 14px;
+    }
+
+    label {
+      font-weight: 600;
+      font-size: 0.92rem;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    input[type="text"],
+    input[type="url"],
+    input[type="file"] {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+      outline: none;
+      background: #fff;
+    }
+
+    input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(20, 85, 204, 0.12);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .row label {
+      margin: 0;
+      font-weight: 500;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    .btn-secondary {
+      background: #e9effd;
+      color: #1a3f8b;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      margin-top: 12px;
+      min-height: 24px;
+      font-size: 0.9rem;
+    }
+
+    .status.success { color: var(--success); }
+    .status.error { color: var(--danger); }
+
+    .preview-wrap {
+      display: grid;
+      place-items: center;
+      min-height: 370px;
+      background: #f8fbff;
+      border: 1px dashed #c8d7f7;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    canvas {
+      width: min(100%, 360px);
+      height: auto;
+      image-rendering: crisp-edges;
+      image-rendering: pixelated;
+      background: #fff;
+      border-radius: 6px;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 10px;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 860px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="panel">
+      <h1>URL to QR Code</h1>
+
+      <div class="field">
+        <label for="linkInput">URL or Text</label>
+        <input
+          id="linkInput"
+          type="text"
+          placeholder="https://example.com"
+          autocomplete="off"
+        />
+      </div>
+
+      <div class="row">
+        <input id="useLogo" type="checkbox" />
+        <label for="useLogo">Include logo in center</label>
+      </div>
+
+      <div class="field">
+        <label for="logoInput">Logo image (optional)</label>
+        <input id="logoInput" type="file" accept="image/*" />
+      </div>
+
+      <div class="actions">
+        <button id="generateBtn" class="btn-primary">Generate QR</button>
+        <button id="downloadBtn" class="btn-secondary" disabled>Download PNG</button>
+      </div>
+
+      <p id="status" class="status"></p>
+      <p class="hint">
+        Tip: when using a logo, keep it small so scanners can still read the code.
+      </p>
+    </section>
+
+    <section class="panel">
+      <div class="preview-wrap">
+        <canvas id="qrCanvas" width="1024" height="1024" aria-label="Generated QR code"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script>
+    const linkInput = document.getElementById("linkInput");
+    const useLogo = document.getElementById("useLogo");
+    const logoInput = document.getElementById("logoInput");
+    const generateBtn = document.getElementById("generateBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const qrCanvas = document.getElementById("qrCanvas");
+    const status = document.getElementById("status");
+
+    function setStatus(message, type = "success") {
+      status.textContent = message;
+      status.className = `status ${type}`;
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Could not read logo file."));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function loadImage(src, crossOrigin = false) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("Could not load logo image."));
+        if (crossOrigin) {
+          img.crossOrigin = "anonymous";
+        }
+        img.src = src;
+      });
+    }
+
+    async function drawLogoOnCanvas() {
+      const file = logoInput.files?.[0];
+      if (!file) {
+        throw new Error("Please choose a logo image first.");
+      }
+
+      const dataUrl = await readFileAsDataUrl(file);
+      const logo = await loadImage(dataUrl);
+
+      const ctx = qrCanvas.getContext("2d");
+      const size = qrCanvas.width;
+      const logoSize = Math.floor(size * 0.22);
+      const padding = Math.floor(size * 0.02);
+      const x = Math.floor((size - logoSize) / 2);
+      const y = Math.floor((size - logoSize) / 2);
+
+      // Draw a white plate below the logo to keep good scan reliability.
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(x - padding, y - padding, logoSize + padding * 2, logoSize + padding * 2);
+      ctx.strokeStyle = "#d0d7e8";
+      ctx.lineWidth = Math.max(2, Math.floor(size * 0.002));
+      ctx.strokeRect(x - padding, y - padding, logoSize + padding * 2, logoSize + padding * 2);
+      ctx.drawImage(logo, x, y, logoSize, logoSize);
+    }
+
+    async function drawQrUsingLibrary(value) {
+      const qrLib = window.QRCode || window.qrcode || window.QRcode;
+      if (!qrLib || typeof qrLib.toCanvas !== "function") {
+        throw new Error("QR library unavailable.");
+      }
+
+      await qrLib.toCanvas(qrCanvas, value, {
+        width: qrCanvas.width,
+        margin: 2,
+        errorCorrectionLevel: "H",
+        color: {
+          dark: "#111111",
+          light: "#ffffff"
+        }
+      });
+    }
+
+    async function drawQrUsingApi(value) {
+      const size = qrCanvas.width;
+      const apiUrl =
+        `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=H&margin=2&data=${encodeURIComponent(value)}`;
+      const qrImg = await loadImage(apiUrl, true);
+      const ctx = qrCanvas.getContext("2d");
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(qrImg, 0, 0, size, size);
+    }
+
+    async function drawQrBase(value) {
+      try {
+        await drawQrUsingLibrary(value);
+        return "library";
+      } catch (err) {
+        await drawQrUsingApi(value);
+        return "api";
+      }
+    }
+
+    async function generateQr() {
+      const value = linkInput.value.trim();
+      const hasLogoFile = Boolean(logoInput.files?.[0]);
+      const shouldDrawLogo = useLogo.checked || hasLogoFile;
+
+      if (!value) {
+        setStatus("Enter a URL or text first.", "error");
+        downloadBtn.disabled = true;
+        return;
+      }
+
+      try {
+        setStatus("Generating QR code...", "success");
+        const qrSource = await drawQrBase(value);
+
+        if (useLogo.checked && !hasLogoFile) {
+          throw new Error("Please choose a logo image first.");
+        }
+
+        if (shouldDrawLogo) {
+          await drawLogoOnCanvas();
+        }
+
+        if (qrSource === "api") {
+          if (shouldDrawLogo) {
+            setStatus("QR code ready with logo. (Used fallback QR service)");
+          } else {
+            setStatus("QR code ready. (Used fallback QR service)");
+          }
+        } else {
+          if (shouldDrawLogo) {
+            setStatus("QR code ready with logo.");
+          } else {
+            setStatus("QR code ready.");
+          }
+        }
+        downloadBtn.disabled = false;
+      } catch (error) {
+        setStatus(error.message || "Could not generate QR code.", "error");
+        downloadBtn.disabled = true;
+      }
+    }
+
+    function downloadQr() {
+      const link = document.createElement("a");
+      link.href = qrCanvas.toDataURL("image/png");
+      link.download = "qr-code.png";
+      link.click();
+    }
+
+    generateBtn.addEventListener("click", generateQr);
+    downloadBtn.addEventListener("click", downloadQr);
+    logoInput.addEventListener("change", () => {
+      if (logoInput.files?.[0]) {
+        useLogo.checked = true;
+      }
+    });
+    linkInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        generateQr();
+      }
+    });
+  </script>
+</body>
+</html>
